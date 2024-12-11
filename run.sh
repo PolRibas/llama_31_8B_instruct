@@ -10,10 +10,10 @@ CACHE_DIR="$CURRENT_DIR/llama_cache"
 mkdir -p "$CACHE_DIR"
 
 # Construir la imagen Docker
-sudo docker build -t my-llama-service:latest .
+sudo docker build -t llama-31-8b-instruct:latest .
 
 # Ejecutar el contenedor Docker con el volumen montado
 sudo docker run -it --rm -p 8002:8002 \
   -v "$CACHE_DIR":/root/.cache/huggingface/hub \
   --env-file .env \
-  my-llama-service:latest
+  llama-31-8b-instruct:latest

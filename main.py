@@ -7,6 +7,7 @@ import transformers
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from huggingface_hub import HfApi
+import json
 
 # Load environment variables
 load_dotenv()
@@ -32,7 +33,7 @@ app = FastAPI()
 model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 
 # Load the tokenizer
-tokenizer = AutoTokenizer.from_pretrained(model_id, use_auth_token=hf_token)
+tokenizer = AutoTokenizer.from_pretrained(model_id, token=hf_token)
 
 # Check and add pad_token if necessary
 if tokenizer.pad_token is None:
@@ -45,7 +46,7 @@ else:
     print(f"Pad token already set: {tokenizer.pad_token}, with id: {pad_token_id}")
 
 # Load the model
-model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", use_auth_token=hf_token)
+model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", token=hf_token)
 
 # Resize token embeddings if pad_token was added
 if tokenizer.pad_token is not None and model.config.pad_token_id is None:
@@ -53,9 +54,6 @@ if tokenizer.pad_token is not None and model.config.pad_token_id is None:
     model.resize_token_embeddings(len(tokenizer))
     model.config.pad_token_id = pad_token_id
     print(f"Model's pad_token_id set to: {model.config.pad_token_id}")
-
-# print("Model loaded.", model)
-# print("Tokenizer loaded.", tokenizer)
 
 # Initialize the pipeline with the updated pad_token_id
 print("Loading the pipeline...")
@@ -71,9 +69,36 @@ pipeline = transformers.pipeline(
 )
 print("Pipeline loaded.")
 
+test_messages = [
+    {"role": "user", "content": "What is the capital of France?"},
+    {"role": "system", "content": "You are a pirate chatbot who always responds in pirate speak!"},
+    {"role": "assistant", "content": "The capital of France is Paris."}
+]
+
 @app.post("/generate")
 def generate(req: GenerateRequest):
     messages = [{"role": m.role, "content": m.content} for m in req.messages]
     outputs = pipeline(messages, max_new_tokens=req.max_new_tokens)
+    generated_text = outputs[0]["generated_text"]
+    return {"generated_text": generated_text}
+
+@app.get("/")
+def read_root():
+    return json.dumps({
+        "name": model_id, 
+        "pipeline": "text-generation", 
+        "developer": "meta",
+        "huggingface": "https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct",
+        "architecture": "Llama 3.1 is an auto-regressive language model that uses an optimized transformer architecture. The tuned versions use supervised fine-tuning (SFT) and reinforcement learning with human feedback (RLHF) to align with human preferences for helpfulness and safety.",
+        "description": "The Meta Llama 3.1 collection of multilingual large language models (LLMs) is a collection of pretrained and instruction tuned generative models in 8B, 70B and 405B sizes (text in/text out). The Llama 3.1 instruction tuned text only models (8B, 70B, 405B) are optimized for multilingual dialogue use cases and outperform many of the available open source and closed chat models on common industry benchmarks.",
+        "max_new_tokens": 256,
+        "example": {
+            "messages": test_messages
+        }
+    })
+
+@app.get("/health")
+def test_model():
+    outputs = pipeline(test_messages, max_new_tokens=256)
     generated_text = outputs[0]["generated_text"]
     return {"generated_text": generated_text}
